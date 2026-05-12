@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FORGE.OS — Mind Map</title>
+
+<!-- PWA manifest -->
+<link rel="manifest" href="./manifest.json">
+
+<!-- iOS PWA support (Android handles it via manifest) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FORGE.OS">
+<link rel="apple-touch-icon" href="./icon-192.png">
+
+<!-- Theme colour (browser chrome on Android) -->
+<meta name="theme-color" content="#6d4aff">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+/* ══════════════════════════════════════════
+   RESET & BASE
+══════════════════════════════════════════ */
+*, *::before, *::after {
+  box-sizing: border-box; margin: 0; padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none; /* prevent browser scroll hijack on canvas */
+}
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: #0f0f13;
+  font-family: 'Caveat', cursive;
+  overscroll-behavior: none;
+}
+
+/* ══════════════════════════════════════════
+   LAYOUT
+══════════════════════════════════════════ */
+#app { display: flex; flex-direction: column; width: 100vw; height: 100vh; }
+
+/* ══════════════════════════════════════════
+   TOOLBAR
+══════════════════════════════════════════ */
+#toolbar {
+  display: flex; align-items: center; gap: 4px; padding: 0 8px;
+  height: 52px; background: #16161c; border-bottom: 1px solid #252530;
+  flex-shrink: 0; user-select: none; z-index: 50;
+  overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch;
+}
+#toolbar::-webkit-scrollbar { display: none; }
+
+.tb-sep { width: 1px; height: 26px; background: #252530; flex-shrink: 0; margin: 0 2px; }
+
+.tb-btn {
+  display: flex; align-items: center; gap: 4px; padding: 6px 10px;
+  border-radius: 8px; border: 1px solid transparent; background: transparent;
+  color: #666; cursor: pointer; font-family: 'Caveat', cursive; font-size: 15px;
+  white-space: nowrap; transition: all .15s; flex-shrink: 0;
+  /* bigger tap targets on mobile */
+  min-height: 40px;
+}
+.tb-btn:hover  { background: #1e1e28; color: #aaa; border-color: #333; }
+.tb-btn.active { background: #2a1f4a; border-color: #6d4aff; color: #a78bfa; }
+.tb-btn svg    { flex-shrink: 0; }
+
+/* ══════════════════════════════════════════
+   COLOUR SWATCHES
+══════════════════════════════════════════ */
+.swatch {
+  width: 22px; height: 22px; border-radius: 5px;
+  border: 2px solid transparent; cursor: pointer;
+  flex-shrink: 0; transition: border-color .15s;
+  min-width: 22px;
+}
+.swatch.on { border-color: #fff; }
+
+/* ══════════════════════════════════════════
+   CANVAS AREA
+══════════════════════════════════════════ */
+#canvas-wrap { flex: 1; position: relative; overflow: hidden; cursor: default; }
+canvas       { position: absolute; top: 0; left: 0; display: block; }
+
+/* ══════════════════════════════════════════
+   INLINE LABEL INPUT
+══════════════════════════════════════════ */
+.node-input {
+  position: absolute;
+  background: transparent; border: none; outline: none;
+  font-family: 'Caveat', cursive;
+  text-align: center; z-index: 100;
+  caret-color: #fff;
+}
+
+/* ══════════════════════════════════════════
+   STATUS BAR
+══════════════════════════════════════════ */
+#status {
+  height: 26px; background: #16161c; border-top: 1px solid #252530;
+  display: flex; align-items: center; padding: 0 10px; gap: 12px; flex-shrink: 0;
+}
+#status span { font-size: 10px; color: #333; font-family: monospace; letter-spacing: .04em; }
+#status span b { color: #555; font-weight: normal; }
+
+/* ══════════════════════════════════════════
+   CONTEXT MENU
+══════════════════════════════════════════ */
+#ctx-menu {
+  position: fixed; display: none;
+  background: #1a1a24; border: 1px solid #333;
+  border-radius: 10px; padding: 4px; z-index: 300; min-width: 150px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.ctx-item {
+  padding: 9px 14px; font-family: 'Caveat', cursive; font-size: 16px;
+  color: #bbb; cursor: pointer; border-radius: 6px;
+}
+.ctx-item:hover, .ctx-item:active { background: #2a2a38; color: #fff; }
+.ctx-sep { height: 1px; background: #252530; margin: 3px 0; }
+
+/* ══════════════════════════════════════════
+   INSTALL BANNER
+══════════════════════════════════════════ */
+#install-banner {
+  display: none; position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+  background: #1e1a2e; border: 1px solid #6d4aff;
+  border-radius: 12px; padding: 10px 16px;
+  display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 4px 24px rgba(109,74,255,0.3);
+  z-index: 400; font-family: 'Caveat', cursive; font-size: 16px; color: #c4b0ff;
+}
+#install-banner button {
+  background: #6d4aff; color: #fff; border: none;
+  padding: 6px 14px; border-radius: 7px; cursor: pointer;
+  font-family: 'Caveat', cursive; font-size: 15px;
+}
+#install-banner .dismiss { background: transparent; color: #666; }
+
+/* ══════════════════════════════════════════
+   HELP HINT (desktop only)
+══════════════════════════════════════════ */
+#help {
+  position: absolute; bottom: 36px; right: 12px;
+  background: #1a1a24cc; border: 1px solid #2a2a38;
+  border-radius: 10px; padding: 10px 14px;
+  font-family: monospace; font-size: 10px; color: #333;
+  line-height: 1.9; z-index: 50; pointer-events: none;
+}
+#help b { color: #555; }
+@media (max-width: 600px) { #help { display: none; } }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══════ TOOLBAR ═══════ -->
+  <div id="toolbar">
+    <span style="font-size:11px;color:#333;font-family:monospace;letter-spacing:.08em;flex-shrink:0">FORGE.OS</span>
+    <div class="tb-sep"></div>
+
+    <button class="tb-btn active" id="btn-select" onclick="setMode('select')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-7 1-4 7z"/></svg>
+      Select
+    </button>
+    <button class="tb-btn" id="btn-node" onclick="setMode('node')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="10" rx="3"/></svg>
+      Node
+    </button>
+    <button class="tb-btn" id="btn-connect" onclick="setMode('connect')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>
+      Connect
+    </button>
+
+    <div class="tb-sep"></div>
+    <div id="swatches" style="display:flex;gap:4px;align-items:center"></div>
+
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onclick="deleteSelected()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+      Del
+    </button>
+    <button class="tb-btn" onclick="undo()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>
+      Undo
+    </button>
+    <button class="tb-btn" onclick="fitView()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+      Fit
+    </button>
+    <button class="tb-btn" onclick="clearAll()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+      Clear
+    </button>
+    <button class="tb-btn" onclick="exportPNG()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      PNG
+    </button>
+  </div>
+
+  <!-- ═══════ CANVAS ═══════ -->
+  <div id="canvas-wrap">
+    <canvas id="bg"></canvas>
+    <canvas id="main"></canvas>
+    <div id="help">
+      <b>V</b> select &nbsp;<b>N</b> node &nbsp;<b>C</b> connect<br>
+      <b>Dbl-click</b> rename &nbsp;<b>Right-click</b> menu<br>
+      <b>Scroll</b> zoom &nbsp;<b>Space+drag</b> pan &nbsp;<b>F</b> fit<br>
+      <b>Del</b> delete &nbsp;<b>Ctrl+Z</b> undo
+    </div>
+  </div>
+
+  <!-- ═══════ STATUS ═══════ -->
+  <div id="status">
+    <span>Mode: <b id="s-mode">select</b></span>
+    <span>Nodes: <b id="s-nodes">0</b></span>
+    <span>Zoom: <b id="s-zoom">100%</b></span>
+    <span style="margin-left:auto;font-family:monospace;font-size:9px;color:#252530">saved ✓</span>
+  </div>
+
+</div><!-- #app -->
+
+<!-- ═══════ CONTEXT MENU ═══════ -->
+<div id="ctx-menu">
+  <div class="ctx-item" onclick="ctxEdit()">✏️ &nbsp;Edit label</div>
+  <div class="ctx-item" onclick="ctxDuplicate()">⧉ &nbsp;Duplicate</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxDelete()">🗑 &nbsp;Delete node</div>
+</div>
+
+<!-- ═══════ INSTALL BANNER ═══════ -->
+<div id="install-banner" style="display:none">
+  📲 &nbsp;Add FORGE.OS to your home screen
+  <button onclick="installApp()">Install</button>
+  <button class="dismiss" onclick="dismissInstall()">✕</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════ -->
+<script>
+
+/* ─────────────────────────────────────────
+   PALETTES
+───────────────────────────────────────── */
+const PALETTES = [
+  { border:'#6d4aff', fill:'rgba(80,50,200,0.18)',  text:'#c4b0ff', name:'purple' },
+  { border:'#e05c7a', fill:'rgba(200,50,80,0.18)',  text:'#ffaabe', name:'red'    },
+  { border:'#3b9eff', fill:'rgba(30,100,220,0.18)', text:'#90cbff', name:'blue'   },
+  { border:'#2ec99a', fill:'rgba(20,160,110,0.18)', text:'#80eec8', name:'teal'   },
+  { border:'#f0a030', fill:'rgba(200,130,20,0.18)', text:'#ffd080', name:'amber'  },
+  { border:'#e060e0', fill:'rgba(180,40,180,0.18)', text:'#f0a0f0', name:'pink'   },
+];
+
+/* ─────────────────────────────────────────
+   STATE
+───────────────────────────────────────── */
+let nodes        = [];
+let edges        = [];
+let undoStack    = [];
+
+let mode         = 'select';
+let pan          = { x: 0, y: 0 };
+let zoom         = 1;
+
+let selNode      = null;
+let selEdge      = null;
+let dragging     = null;
+let dragOff      = { x: 0, y: 0 };
+
+let isPanning    = false;
+let panStart     = { x: 0, y: 0 };
+let panOrig      = { x: 0, y: 0 };
+
+let connectFrom  = null;
+let mousePos     = { x: 0, y: 0 };
+
+let currentColor = PALETTES[0];
+let ctxTarget    = null;
+let spaceDown    = false;
+
+// pinch-to-zoom
+let lastPinchDist = null;
+
+/* ─────────────────────────────────────────
+   CANVAS
+───────────────────────────────────────── */
+const wrap    = document.getElementById('canvas-wrap');
+const bgCvs   = document.getElementById('bg');
+const cvs     = document.getElementById('main');
+const ctx     = cvs.getContext('2d');
+const bgCtx   = bgCvs.getContext('2d');
+const ctxMenu = document.getElementById('ctx-menu');
+
+/* ─────────────────────────────────────────
+   RESIZE + GRID
+───────────────────────────────────────── */
+function resize() {
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  [bgCvs, cvs].forEach(c => { c.width = W; c.height = H; });
+  drawGrid(); redraw();
+}
+
+function drawGrid() {
+  const W = bgCvs.width, H = bgCvs.height;
+  bgCtx.fillStyle = '#0f0f13';
+  bgCtx.fillRect(0, 0, W, H);
+  const gs = 40 * zoom;
+  const ox = ((pan.x % gs) + gs) % gs;
+  const oy = ((pan.y % gs) + gs) % gs;
+  bgCtx.strokeStyle = '#1c1c24'; bgCtx.lineWidth = 0.5;
+  bgCtx.beginPath();
+  for (let x = ox - gs; x < W + gs; x += gs) { bgCtx.moveTo(x, 0); bgCtx.lineTo(x, H); }
+  for (let y = oy - gs; y < H + gs; y += gs) { bgCtx.moveTo(0, y); bgCtx.lineTo(W, y); }
+  bgCtx.stroke();
+  bgCtx.fillStyle = '#222230';
+  for (let x = ox - gs; x < W + gs; x += gs)
+    for (let y = oy - gs; y < H + gs; y += gs)
+      bgCtx.fillRect(x - 1.5, y - 1.5, 3, 3);
+}
+
+/* ─────────────────────────────────────────
+   COORD HELPERS
+───────────────────────────────────────── */
+function w2s(wx, wy) { return { x: wx * zoom + pan.x, y: wy * zoom + pan.y }; }
+function s2w(sx, sy) { return { x: (sx - pan.x) / zoom, y: (sy - pan.y) / zoom }; }
+
+/* ─────────────────────────────────────────
+   SWATCHES
+───────────────────────────────────────── */
+const swWrap = document.getElementById('swatches');
+PALETTES.forEach(p => {
+  const d = document.createElement('div');
+  d.className = 'swatch' + (p === currentColor ? ' on' : '');
+  d.style.background = p.border; d.title = p.name;
+  d.onclick = () => {
+    currentColor = p;
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('on'));
+    d.classList.add('on');
+    if (selNode) { pushUndo(); selNode.pal = p; redraw(); save(); }
+  };
+  swWrap.appendChild(d);
+});
+
+/* ─────────────────────────────────────────
+   MODE
+───────────────────────────────────────── */
+function setMode(m) {
+  mode = m; connectFrom = null;
+  document.querySelectorAll('.tb-btn').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById('btn-' + m);
+  if (el) el.classList.add('active');
+  document.getElementById('s-mode').textContent = m;
+  cvs.style.cursor = m === 'node' ? 'crosshair' : m === 'connect' ? 'cell' : 'default';
+}
+
+/* ─────────────────────────────────────────
+   HIT TEST
+───────────────────────────────────────── */
+function hitNode(wx, wy) {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (wx >= n.x && wx <= n.x + n.w && wy >= n.y && wy <= n.y + n.h) return n;
+  }
+  return null;
+}
+function hitEdge(wx, wy) {
+  for (const e of edges) {
+    const a = nodes.find(n => n.id === e.from), b = nodes.find(n => n.id === e.to);
+    if (!a || !b) continue;
+    const ax = a.x + a.w/2, ay = a.y + a.h/2, bx = b.x + b.w/2, by = b.y + b.h/2;
+    const dx = bx-ax, dy = by-ay, len = Math.sqrt(dx*dx+dy*dy)||1;
+    const t = Math.max(0, Math.min(1, ((wx-ax)*dx+(wy-ay)*dy)/(len*len)));
+    const px = ax+t*dx-wx, py = ay+t*dy-wy;
+    if (Math.sqrt(px*px+py*py) < 12/zoom) return e;
+  }
+  return null;
+}
+
+/* ─────────────────────────────────────────
+   DRAW
+───────────────────────────────────────── */
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x+r,y); c.lineTo(x+w-r,y); c.quadraticCurveTo(x+w,y,x+w,y+r);
+  c.lineTo(x+w,y+h-r); c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  c.lineTo(x+r,y+h); c.quadraticCurveTo(x,y+h,x,y+h-r);
+  c.lineTo(x,y+r); c.quadraticCurveTo(x,y,x+r,y);
+  c.closePath();
+}
+
+function drawNode(n, isSel) {
+  const s = w2s(n.x, n.y), sw = n.w*zoom, sh = n.h*zoom, r = 10*zoom;
+  ctx.save();
+  roundRect(ctx, s.x, s.y, sw, sh, r);
+  ctx.fillStyle = n.pal.fill; ctx.fill();
+  ctx.strokeStyle = isSel ? '#fff' : n.pal.border;
+  ctx.lineWidth = isSel ? 2.5 : 1.5;
+  ctx.setLineDash([]); ctx.stroke();
+  ctx.fillStyle = n.pal.text;
+  ctx.font = `${Math.round(16*zoom)}px 'Caveat'`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(n.label, s.x+sw/2, s.y+sh/2);
+  if (mode === 'connect' && n === connectFrom) {
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.setLineDash([3,3]);
+    ctx.strokeRect(s.x-4, s.y-4, sw+8, sh+8); ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+function drawEdge(e, isSel) {
+  const a = nodes.find(n=>n.id===e.from), b = nodes.find(n=>n.id===e.to);
+  if (!a||!b) return;
+  const ax=a.x+a.w/2, ay=a.y+a.h/2, bx=b.x+b.w/2, by=b.y+b.h/2;
+  const sa=w2s(ax,ay), sb=w2s(bx,by);
+  const dx=sb.x-sa.x, dy=sb.y-sa.y;
+  const angle=Math.atan2(dy,dx), len=Math.sqrt(dx*dx+dy*dy);
+  const hs=Math.min(16,len*0.25);
+  const cpx=sa.x+(sb.x-sa.x)*0.5, cpy=sa.y+(sb.y-sa.y)*0.5-Math.abs(dx)*0.12;
+  ctx.save();
+  ctx.strokeStyle = isSel ? '#fff' : (e.color||'#6d4aff');
+  ctx.lineWidth = isSel ? 2.5 : 1.5;
+  ctx.setLineDash([6,4]); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(sa.x,sa.y);
+  ctx.quadraticCurveTo(cpx,cpy,sb.x,sb.y); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = e.color||'#6d4aff';
+  ctx.beginPath(); ctx.moveTo(sb.x,sb.y);
+  ctx.lineTo(sb.x-hs*Math.cos(angle-0.4), sb.y-hs*Math.sin(angle-0.4));
+  ctx.lineTo(sb.x-hs*Math.cos(angle+0.4), sb.y-hs*Math.sin(angle+0.4));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function redraw() {
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  edges.forEach(e => drawEdge(e, e===selEdge));
+  if (connectFrom && mode==='connect') {
+    const sa = w2s(connectFrom.x+connectFrom.w/2, connectFrom.y+connectFrom.h/2);
+    ctx.save(); ctx.strokeStyle='#ffffff88'; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(sa.x,sa.y); ctx.lineTo(mousePos.x,mousePos.y);
+    ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+  }
+  nodes.forEach(n => drawNode(n, n===selNode));
+  document.getElementById('s-nodes').textContent = nodes.length;
+  document.getElementById('s-zoom').textContent  = Math.round(zoom*100)+'%';
+}
+
+/* ─────────────────────────────────────────
+   UNDO / SAVE / LOAD
+───────────────────────────────────────── */
+function pushUndo() {
+  undoStack.push(JSON.stringify({nodes,edges}));
+  if (undoStack.length > 80) undoStack.shift();
+}
+function undo() {
+  if (!undoStack.length) return;
+  const d=JSON.parse(undoStack.pop());
+  nodes=d.nodes; edges=d.edges; selNode=null; selEdge=null;
+  redraw(); save();
+}
+function save() {
+  try { localStorage.setItem('forge_pwa_v1', JSON.stringify({nodes,edges,pan,zoom})); } catch(e){}
+}
+function load() {
+  try {
+    const d=JSON.parse(localStorage.getItem('forge_pwa_v1'));
+    if (d) { nodes=d.nodes||[]; edges=d.edges||[]; pan=d.pan||{x:0,y:0}; zoom=d.zoom||1; }
+  } catch(e){}
+}
+
+/* ─────────────────────────────────────────
+   POINTER HELPERS
+───────────────────────────────────────── */
+function getPos(e) {
+  const r=cvs.getBoundingClientRect();
+  const cl=e.touches?e.touches[0]:e;
+  return { cx: cl.clientX-r.left, cy: cl.clientY-r.top };
+}
+function pinchDist(e) {
+  const dx=e.touches[0].clientX-e.touches[1].clientX;
+  const dy=e.touches[0].clientY-e.touches[1].clientY;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+
+/* ─────────────────────────────────────────
+   POINTER DOWN
+───────────────────────────────────────── */
+cvs.addEventListener('mousedown', onDown);
+cvs.addEventListener('touchstart', e => { e.preventDefault(); onDown(e); }, {passive:false});
+
+function onDown(e) {
+  hideCtx();
+  if (e.button===2) return;
+
+  // two-finger pinch on mobile — don't treat as drag
+  if (e.touches && e.touches.length===2) {
+    lastPinchDist = pinchDist(e);
+    isPanning=false; dragging=null;
+    return;
+  }
+
+  const {cx,cy}=getPos(e);
+  const {x:wx,y:wy}=s2w(cx,cy);
+
+  if (spaceDown || e.button===1) {
+    isPanning=true; panStart={x:cx,y:cy}; panOrig={x:pan.x,y:pan.y}; return;
+  }
+
+  if (mode==='select') {
+    selEdge=null;
+    const n=hitNode(wx,wy);
+    if (n) { selNode=n; dragging=n; dragOff={x:wx-n.x,y:wy-n.y}; redraw(); return; }
+    const ed=hitEdge(wx,wy);
+    if (ed) { selEdge=ed; selNode=null; redraw(); return; }
+    selNode=null; isPanning=true; panStart={x:cx,y:cy}; panOrig={x:pan.x,y:pan.y};
+    redraw(); return;
+  }
+
+  if (mode==='node') {
+    pushUndo();
+    const n={ id:Date.now()+'', label:'Node', x:wx-70, y:wy-22, w:140, h:44, pal:currentColor };
+    nodes.push(n); selNode=n; selEdge=null;
+    redraw(); save(); promptLabel(n); return;
+  }
+
+  if (mode==='connect') {
+    const n=hitNode(wx,wy);
+    if (n) {
+      if (!connectFrom) { connectFrom=n; selNode=n; redraw(); }
+      else if (connectFrom!==n) {
+        const already=edges.find(e=>(e.from===connectFrom.id&&e.to===n.id)||(e.from===n.id&&e.to===connectFrom.id));
+        if (!already) { pushUndo(); edges.push({id:Date.now()+'',from:connectFrom.id,to:n.id,color:currentColor.border}); save(); }
+        connectFrom=null; selNode=null; redraw();
+      }
+    } else { connectFrom=null; selNode=null; redraw(); }
+    return;
+  }
+}
+
+/* ─────────────────────────────────────────
+   POINTER MOVE
+───────────────────────────────────────── */
+window.addEventListener('mousemove', onMove);
+window.addEventListener('touchmove', e=>{ e.preventDefault(); onMove(e); }, {passive:false});
+
+function onMove(e) {
+  // pinch zoom
+  if (e.touches && e.touches.length===2) {
+    const dist=pinchDist(e);
+    if (lastPinchDist) {
+      const r=cvs.getBoundingClientRect();
+      const cx=(e.touches[0].clientX+e.touches[1].clientX)/2-r.left;
+      const cy=(e.touches[0].clientY+e.touches[1].clientY)/2-r.top;
+      const w=s2w(cx,cy);
+      const delta=dist/lastPinchDist;
+      zoom=Math.max(0.15,Math.min(4,zoom*delta));
+      pan.x=cx-w.x*zoom; pan.y=cy-w.y*zoom;
+      drawGrid(); redraw();
+    }
+    lastPinchDist=dist; return;
+  }
+  lastPinchDist=null;
+
+  const {cx,cy}=getPos(e);
+  const {x:wx,y:wy}=s2w(cx,cy);
+  mousePos={x:cx,y:cy};
+
+  if (isPanning) { pan.x=panOrig.x+(cx-panStart.x); pan.y=panOrig.y+(cy-panStart.y); drawGrid(); redraw(); return; }
+  if (dragging && mode==='select') { dragging.x=wx-dragOff.x; dragging.y=wy-dragOff.y; redraw(); return; }
+  if (connectFrom && mode==='connect') redraw();
+}
+
+/* ─────────────────────────────────────────
+   POINTER UP
+───────────────────────────────────────── */
+window.addEventListener('mouseup',  onUp);
+window.addEventListener('touchend', onUp);
+
+function onUp() {
+  lastPinchDist=null;
+  if (isPanning) { isPanning=false; save(); return; }
+  if (dragging)  { pushUndo(); save(); dragging=null; }
+}
+
+/* ─────────────────────────────────────────
+   RIGHT CLICK
+───────────────────────────────────────── */
+cvs.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const r=cvs.getBoundingClientRect();
+  const {x:wx,y:wy}=s2w(e.clientX-r.left,e.clientY-r.top);
+  const n=hitNode(wx,wy);
+  if (n) { ctxTarget=n; selNode=n; redraw(); showCtx(e.clientX,e.clientY); }
+});
+
+// long-press on mobile = right-click
+let longPressTimer=null;
+cvs.addEventListener('touchstart', e=>{
+  if (e.touches.length!==1) return;
+  const t=e.touches[0];
+  longPressTimer=setTimeout(()=>{
+    const r=cvs.getBoundingClientRect();
+    const {x:wx,y:wy}=s2w(t.clientX-r.left,t.clientY-r.top);
+    const n=hitNode(wx,wy);
+    if (n) { ctxTarget=n; selNode=n; redraw(); showCtx(t.clientX,t.clientY); }
+  }, 500);
+},{passive:true});
+cvs.addEventListener('touchend',  ()=>clearTimeout(longPressTimer));
+cvs.addEventListener('touchmove', ()=>clearTimeout(longPressTimer));
+
+function showCtx(x,y) { ctxMenu.style.display='block'; ctxMenu.style.left=x+'px'; ctxMenu.style.top=y+'px'; }
+function hideCtx()     { ctxMenu.style.display='none'; }
+window.addEventListener('click', e=>{ if(!ctxMenu.contains(e.target)) hideCtx(); }, true);
+
+function ctxEdit()      { hideCtx(); if(ctxTarget) promptLabel(ctxTarget); }
+function ctxDuplicate() {
+  hideCtx(); if(!ctxTarget) return; pushUndo();
+  const n={...ctxTarget,id:Date.now()+'',x:ctxTarget.x+30,y:ctxTarget.y+30};
+  nodes.push(n); selNode=n; redraw(); save();
+}
+function ctxDelete() {
+  hideCtx(); if(!ctxTarget) return; pushUndo();
+  nodes=nodes.filter(n=>n!==ctxTarget);
+  edges=edges.filter(e=>e.from!==ctxTarget.id&&e.to!==ctxTarget.id);
+  ctxTarget=null; selNode=null; redraw(); save();
+}
+
+/* ─────────────────────────────────────────
+   INLINE LABEL EDITOR
+───────────────────────────────────────── */
+function promptLabel(n) {
+  const s=w2s(n.x,n.y);
+  const inp=document.createElement('input');
+  inp.className='node-input'; inp.type='text'; inp.value=n.label;
+  inp.style.left=s.x+'px'; inp.style.top=s.y+'px';
+  inp.style.width=(n.w*zoom)+'px'; inp.style.height=(n.h*zoom)+'px';
+  inp.style.color=n.pal.text; inp.style.fontSize=Math.round(16*zoom)+'px';
+  wrap.appendChild(inp); inp.focus(); inp.select();
+  const commit=()=>{ n.label=inp.value.trim()||n.label; inp.remove(); redraw(); save(); };
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key==='Escape') commit(); });
+  inp.addEventListener('blur', commit);
+}
+cvs.addEventListener('dblclick', e=>{
+  const r=cvs.getBoundingClientRect();
+  const {x:wx,y:wy}=s2w(e.clientX-r.left,e.clientY-r.top);
+  const n=hitNode(wx,wy);
+  if(n){ selNode=n; promptLabel(n); }
+});
+
+/* ─────────────────────────────────────────
+   SCROLL ZOOM (desktop)
+───────────────────────────────────────── */
+wrap.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const r=cvs.getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  const w=s2w(mx,my);
+  zoom=Math.max(0.15,Math.min(4,zoom*(e.deltaY<0?1.1:0.9)));
+  pan.x=mx-w.x*zoom; pan.y=my-w.y*zoom;
+  drawGrid(); redraw(); save();
+},{passive:false});
+
+/* ─────────────────────────────────────────
+   FIT / DELETE / CLEAR / EXPORT
+───────────────────────────────────────── */
+function fitView() {
+  if(!nodes.length) return;
+  let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
+  nodes.forEach(n=>{minx=Math.min(minx,n.x);miny=Math.min(miny,n.y);maxx=Math.max(maxx,n.x+n.w);maxy=Math.max(maxy,n.y+n.h);});
+  const pad=60,W=cvs.width,H=cvs.height;
+  zoom=Math.min((W-pad*2)/(maxx-minx||1),(H-pad*2)/(maxy-miny||1),2);
+  pan.x=pad+(W-pad*2-(maxx-minx)*zoom)/2-minx*zoom;
+  pan.y=pad+(H-pad*2-(maxy-miny)*zoom)/2-miny*zoom;
+  drawGrid(); redraw();
+}
+function deleteSelected() {
+  if(selNode){ pushUndo(); nodes=nodes.filter(n=>n!==selNode); edges=edges.filter(e=>e.from!==selNode.id&&e.to!==selNode.id); selNode=null; redraw(); save(); }
+  else if(selEdge){ pushUndo(); edges=edges.filter(e=>e!==selEdge); selEdge=null; redraw(); save(); }
+}
+function clearAll() {
+  if(!confirm('Clear everything?')) return;
+  pushUndo(); nodes=[]; edges=[]; selNode=null; selEdge=null; redraw(); save();
+}
+function exportPNG() {
+  const off=document.createElement('canvas');
+  off.width=cvs.width; off.height=cvs.height;
+  const oc=off.getContext('2d');
+  oc.fillStyle='#0f0f13'; oc.fillRect(0,0,off.width,off.height);
+  oc.drawImage(bgCvs,0,0); oc.drawImage(cvs,0,0);
+  const a=document.createElement('a');
+  a.href=off.toDataURL('image/png'); a.download='forge_mindmap.png'; a.click();
+}
+
+/* ─────────────────────────────────────────
+   KEYBOARD
+───────────────────────────────────────── */
+window.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(e.code==='Space'){ spaceDown=true; cvs.style.cursor='grab'; return; }
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'){ e.preventDefault(); undo(); return; }
+  if(!e.ctrlKey&&!e.metaKey){
+    const map={v:'select',n:'node',c:'connect'};
+    if(map[e.key]) setMode(map[e.key]);
+    if(e.key==='f') fitView();
+    if(e.key==='Delete'||e.key==='Backspace') deleteSelected();
+    if(e.key==='Escape'){ connectFrom=null; selNode=null; selEdge=null; setMode('select'); redraw(); }
+  }
+});
+window.addEventListener('keyup', e=>{ if(e.code==='Space'){ spaceDown=false; cvs.style.cursor='default'; } });
+
+/* ─────────────────────────────────────────
+   PWA — INSTALL PROMPT
+───────────────────────────────────────── */
+let deferredPrompt=null;
+const installBanner=document.getElementById('install-banner');
+
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault(); deferredPrompt=e;
+  installBanner.style.display='flex';
+});
+function installApp() {
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(()=>{ deferredPrompt=null; installBanner.style.display='none'; });
+}
+function dismissInstall() { installBanner.style.display='none'; }
+window.addEventListener('appinstalled', ()=>{ installBanner.style.display='none'; });
+
+/* ─────────────────────────────────────────
+   SERVICE WORKER REGISTRATION
+───────────────────────────────────────── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.warn('SW failed:', err));
+  });
+}
+
+/* ─────────────────────────────────────────
+   STARTER NODES
+───────────────────────────────────────── */
+function seedCanvas() {
+  nodes=[
+    {id:'1',label:'Mindset',            x:60,  y:200,w:140,h:50,pal:PALETTES[0]},
+    {id:'2',label:'Be a problem solver',x:280, y:200,w:200,h:50,pal:PALETTES[0]},
+    {id:'3',label:'Resolve a pain',     x:560, y:120,w:160,h:50,pal:PALETTES[0]},
+    {id:'4',label:'Save them time',     x:560, y:200,w:160,h:50,pal:PALETTES[0]},
+    {id:'5',label:'Make them money',    x:560, y:280,w:160,h:50,pal:PALETTES[0]},
+    {id:'6',label:'Goals',              x:60,  y:320,w:140,h:50,pal:PALETTES[1]},
+    {id:'7',label:'SLC > MVP',          x:280, y:320,w:160,h:50,pal:PALETTES[1]},
+    {id:'8',label:'Build',              x:60,  y:440,w:140,h:50,pal:PALETTES[2]},
+  ];
+  edges=[
+    {id:'e1',from:'1',to:'2',color:PALETTES[0].border},
+    {id:'e2',from:'2',to:'3',color:PALETTES[0].border},
+    {id:'e3',from:'2',to:'4',color:PALETTES[0].border},
+    {id:'e4',from:'2',to:'5',color:PALETTES[0].border},
+    {id:'e5',from:'1',to:'6',color:PALETTES[1].border},
+    {id:'e6',from:'6',to:'7',color:PALETTES[1].border},
+    {id:'e7',from:'6',to:'8',color:PALETTES[2].border},
+  ];
+  save();
+}
+
+/* ─────────────────────────────────────────
+   BOOT
+───────────────────────────────────────── */
+load();
+if(!nodes.length) seedCanvas();
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>
