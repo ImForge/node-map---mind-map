@@ -132,7 +132,7 @@ No build step needed — just open the file:
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/mindforge.git
+git clone https://github.com/ImForge/node-map---mind-map
 cd mindforge
 
 # Option 1: open directly
