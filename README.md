@@ -176,7 +176,7 @@ Your app is live at `https://YOUR_USERNAME.github.io/mindforge` in about 60 seco
 - [ ] Node images / emoji support
 - [ ] Collaborative editing (WebSockets)
 - [ ] Custom node shapes
-
+(THE UPDATED VERSION COMMING SOON)
 ---
 
 ## 👤 Built by
